@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en-AU" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<title>Melbourne Field Map — Solo Winter Edition</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+  :root{
+    --panel:#111111;
+    --panel2:#1a1a1a;
+    --line:#2a2a2a;
+    --ink:#f2f0ec;
+    --muted:#9a9a9a;
+    --dim:#777;
+    --accent:#e8358c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--panel);color:var(--ink);font-family:'Inter',sans-serif;}
+  #app{display:flex;height:100vh;width:100vw;overflow:hidden;}
+
+  /* ---------------- SIDEBAR ---------------- */
+  #sidebar{width:400px;min-width:400px;height:100%;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;z-index:10;}
+  #sidebar-scroll{overflow-y:auto;padding:18px 20px 46px;flex:1;}
+  #sidebar-scroll::-webkit-scrollbar{width:8px;}
+  #sidebar-scroll::-webkit-scrollbar-thumb{background:#333;border-radius:4px;}
+
+  .brand{padding:20px 20px 15px;border-bottom:1px solid var(--line);}
+  .brand-tag{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.15em;color:var(--dim);text-transform:uppercase;margin-bottom:6px;}
+  .brand h1{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;line-height:1;margin:0;letter-spacing:0.01em;text-transform:uppercase;}
+  .brand h1 span{color:var(--accent);}
+  .brand p{margin:8px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5;}
+  .brand .base{margin-top:9px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);letter-spacing:.03em;display:flex;align-items:center;gap:7px;}
+  .brand .base b{color:var(--ink);}
+  .home-dot{width:11px;height:11px;border-radius:3px;background:var(--ink);display:inline-block;flex:0 0 auto;}
+
+  .section-label{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin:24px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .section-label small{color:#5f5f5f;font-weight:400;text-transform:none;letter-spacing:0;font-size:10.5px;text-align:right;}
+  .section-label:first-child{margin-top:6px;}
+
+  .cat-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;user-select:none;transition:background .15s ease;border:1px solid transparent;}
+  .cat-row:hover{background:rgba(255,255,255,0.05);}
+  .cat-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 3px rgba(255,255,255,0.06);}
+  .cat-name{font-size:14px;font-weight:500;flex:1;}
+  .cat-name em{font-style:normal;color:var(--dim);font-size:11.5px;}
+  .cat-count{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);}
+  input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer;flex:0 0 auto;}
+  .cat-all{border-bottom:1px solid var(--line);margin-bottom:6px;padding-bottom:12px;}
+  .cat-all .cat-name{font-weight:700;}
+  .cat-dot.all{background:conic-gradient(#8b5cf6,#e8358c,#f2802e,#b6862c,#3f8f2f,#0ea5e9,#8b5cf6);box-shadow:0 0 0 3px rgba(255,255,255,0.06);}
+
+  .mini-actions{display:flex;gap:8px;margin-top:8px;padding-left:2px;}
+  .mini-actions button{background:none;border:none;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;cursor:pointer;padding:2px 0;text-transform:uppercase;}
+  .mini-actions button:hover{text-decoration:underline;}
+  .mini-actions span{color:#3a3a3a;}
+
+  /* travel mode segmented control */
+  #mode-toggle{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px;}
+  #mode-toggle button{flex:1;border:none;background:transparent;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;padding:8px 6px;border-radius:6px;cursor:pointer;letter-spacing:0.01em;transition:all .15s ease;text-transform:uppercase;}
+  #mode-toggle button.active{background:var(--ink);color:#111;}
+  #mode-note{font-size:11.5px;color:#7a7a7a;margin-top:8px;line-height:1.5;}
+
+  /* choose stops */
+  .choose-group{margin-bottom:12px;}
+  .choose-head{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;margin:4px 2px 6px;}
+  .seen-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:0 0 10px;}
+  .seen-toggle{display:flex;align-items:center;gap:7px;color:var(--muted);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;}
+  .seen-toggle input{width:15px;height:15px;}
+  .seen-count{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);}
+  .choose-row{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;border:1px solid transparent;transition:background .12s;}
+  .choose-row:hover{background:rgba(255,255,255,0.05);}
+  .choose-row.on{background:rgba(232,53,140,0.10);border-color:rgba(232,53,140,0.35);}
+  .choose-row.seen{opacity:.72;}
+  .choose-pick{display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer;}
+  .choose-pick input{margin-top:2px;}
+  .choose-name{font-size:13.5px;font-weight:500;line-height:1.3;}
+  .choose-name small{display:block;color:var(--dim);font-size:11px;font-weight:400;margin-top:1px;}
+  .choose-row.seen .choose-name{color:var(--dim);text-decoration:line-through;}
+  .seen-btn{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--dim);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .seen-btn:hover{border-color:var(--muted);color:var(--muted);}
+  .seen-btn.on{background:#3f8f2f;border-color:#3f8f2f;color:#fff;}
+  .seen-pop-btn{width:100%;margin-top:6px;background:transparent;color:#cfcfcf;border:1px solid #444;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.02em;padding:7px;cursor:pointer;}
+  .seen-pop-btn.in{background:#3f8f2f;border-color:#3f8f2f;color:#fff;}
+  .fav-btn{flex:0 0 auto;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--dim);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .fav-btn:hover{border-color:#e8b64a;color:#e8b64a;}
+  .fav-btn.on{background:#e8b64a;border-color:#e8b64a;color:#111;}
+  .fav-pop-btn{width:100%;margin-top:6px;background:transparent;color:#e8b64a;border:1px solid #6a5a2e;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.02em;padding:7px;cursor:pointer;}
+  .fav-pop-btn.in{background:#e8b64a;border-color:#e8b64a;color:#111;}
+
+  /* route */
+  #route-wrap{display:flex;flex-direction:column;gap:16px;}
+  .route-summary{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.6;}
+  .route-summary b{color:var(--ink);}
+  .route-open{display:inline-block;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.04em;color:var(--accent);text-decoration:none;text-transform:uppercase;}
+  .route-open:hover{text-decoration:underline;}
+  .route-actions{margin-top:2px;}
+  .route-actions button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:6px 10px;cursor:pointer;}
+  .route-actions button:hover{border-color:var(--accent);color:var(--ink);}
+  .stop{display:flex;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line);}
+  .stop:last-child{border-bottom:none;}
+  .stop-num{flex:0 0 26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:#fff;margin-top:2px;border:2px solid #111;}
+  .stop-num.home{background:var(--ink);color:#111;border-color:var(--ink);border-radius:6px;}
+  .stop-body{flex:1;min-width:0;}
+  .stop-name{font-weight:600;font-size:14.5px;margin-bottom:2px;display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
+  .stop-name .rm{background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;flex:0 0 auto;}
+  .stop-name .rm:hover{color:var(--accent);}
+  .stop-desc{font-size:12.5px;color:var(--muted);line-height:1.4;margin-bottom:6px;}
+  .stop-leg{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .stop-leg a{color:var(--accent);text-decoration:none;font-weight:600;}
+  .stop-leg a:hover{text-decoration:underline;}
+  .empty-hint{font-size:13px;color:var(--muted);line-height:1.6;padding:6px 2px;}
+
+  /* notes */
+  details.notes{margin-top:8px;border-top:1px solid var(--line);padding-top:12px;}
+  details.notes>summary{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;list-style:none;color:var(--ink);}
+  details.notes>summary::-webkit-details-marker{display:none;}
+  details.notes>summary::before{content:'▸ ';color:var(--dim);}
+  details.notes[open]>summary::before{content:'▾ ';}
+  .note-intro{font-size:11.5px;color:var(--dim);margin:8px 0 12px;line-height:1.55;}
+  .note-block{margin-bottom:14px;}
+  .note-block h4{font-size:12.5px;margin:0 0 6px;display:flex;align-items:center;gap:8px;font-weight:600;}
+  .note-block h4 i{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .note-block textarea{width:100%;min-height:56px;resize:vertical;font-family:'Inter',sans-serif;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:9px;background:var(--panel2);color:var(--ink);line-height:1.5;}
+  .note-block textarea:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .note-block details{margin-top:6px;}
+  .note-block summary{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--dim);cursor:pointer;text-transform:uppercase;}
+  .note-block code{display:block;background:#000;color:#d7e9c8;border-radius:7px;padding:9px 10px;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;}
+
+  /* ---------------- MAP ---------------- */
+  #map-outer{position:relative;flex:1;height:100%;}
+  #map{position:absolute;inset:0;width:100%;height:100%;min-height:300px;background:#e9e9e9;}
+  #map-error{display:none;position:absolute;top:16px;left:50%;transform:translateX(-50%);background:#2a1414;border:1px solid #7a2a2a;color:#f2eee2;font-size:13px;padding:10px 16px;border-radius:8px;z-index:1000;max-width:80%;text-align:center;}
+  .leaflet-popup-content-wrapper{background:#111;color:#f2f0ec;border-radius:10px;font-family:'Inter',sans-serif;}
+  .leaflet-popup-tip{background:#111;}
+  .leaflet-container a.leaflet-popup-close-button{color:#888;}
+  .popup-cat{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;display:inline-block;}
+  .popup-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;margin:0 0 4px;}
+  .popup-desc{font-size:12.5px;color:#b4b4b4;line-height:1.45;margin:0 0 8px;}
+  .pop-btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:7px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.02em;padding:8px;cursor:pointer;}
+  .pop-btn.in{background:#333;color:#f2f0ec;}
+  .popup-link{font-size:12px;font-weight:600;color:#fff;text-decoration:none;border-bottom:1px solid #555;}
+  .popup-link:hover{border-color:#fff;}
+
+  @media (max-width:820px){
+    #app{flex-direction:column;}
+    #sidebar{width:100%;min-width:0;height:50%;order:2;border-right:none;border-top:1px solid var(--line);}
+    #map-outer{order:1;height:50%;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="brand">
+      <div class="brand-tag">field map · 2026</div>
+      <h1>Melbourne<br><span>// field map</span></h1>
+      <p>Turn on a category to see the spots. Tick the exact ones you feel like — a coffee, a lunch spot, a bathhouse — and they become a street-by-street route from your hotel.</p>
+      <div class="base"><span class="home-dot"></span><span><b>Base:</b> Novotel on Collins · 270 Collins St</span></div>
+    </div>
+
+    <div id="sidebar-scroll">
+
+      <div class="section-label">Things to do <small>show pins on map</small></div>
+      <label class="cat-row cat-all"><input type="checkbox" id="allCat"><span class="cat-dot all"></span><span class="cat-name">All categories</span><span class="cat-count" id="allCount"></span></label>
+      <div id="cat-toggles"></div>
+
+      <div class="section-label">Choose your stops <small>tick to route · ✓ to mark seen</small></div>
+      <div class="seen-controls">
+        <label class="seen-toggle"><input type="checkbox" id="favOnly"> ★ Favourites only</label>
+        <label class="seen-toggle"><input type="checkbox" id="hideSeen"> Hide seen</label>
+        <span class="seen-count" id="seenCount"></span>
+      </div>
+      <div id="choose-wrap"></div>
+
+      <div class="section-label" style="margin-top:24px;">My route <small>from the hotel</small></div>
+      <div id="mode-toggle">
+        <button data-mode="walking" class="active" type="button">Walking</button>
+        <button data-mode="transit" type="button">Train / Tram</button>
+      </div>
+      <div id="mode-note">Switches leg times and every “Directions” link to that mode. The route line follows the pedestrian street network when you’re online — tap Directions for turn-by-turn.</div>
+      <div id="route-wrap" style="margin-top:14px;"></div>
+
+      <details class="notes">
+        <summary>Notes / my own recs</summary>
+        <div class="note-intro">Jot your own TikTok finds under each category (saved in this browser). To put one on the map, copy the snippet and paste it into the <b>SPOTS</b> array near the bottom of this file’s code.</div>
+        <div id="notes-build"></div>
+      </details>
+
+    </div>
+  </div>
+
+  <div id="map-outer">
+    <div id="map-error"></div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============================================================
+   MELBOURNE FIELD MAP — data + engine
+   TO ADD YOUR OWN SPOT: copy this shape into the matching block.
+     { name:"Place", cat:"pastry", area:"Suburb", lat:-37.80, lng:144.98,
+       note:"why it's good", q:"Place, Suburb VIC" }   // q = Google Maps search text
+   cat = laneways | pastry | brekky | eats | markets | design | wellness
+   ============================================================ */
+
+const CATS = {
+  laneways:{label:"Sights, Laneways & Galleries", hex:"#8b5cf6"},
+  pastry:  {label:"Cafés & Pastries",             hex:"#e0a92e"},
+  brekky:  {label:"Cafés & Breakfast",            hex:"#8a4f2b"},
+  eats:    {label:"Eats — Lunch & Dinner",        hex:"#d64027"},
+  markets: {label:"Markets",                      hex:"#e8358c"},
+  design:  {label:"Design, Boutiques & Vintage",  hex:"#0ea5e9"},
+  wellness:{label:"Wellness & Bathhouses",        hex:"#3f8f2f"}
+};
+const CAT_ORDER = ["laneways","pastry","brekky","eats","markets","design","wellness"];
+
+/* Permanent anchor — every route starts here */
+const START = {
+  name:"Novotel Melbourne on Collins",
+  area:"270 Collins St, CBD (your hotel)",
+  lat:-37.8160, lng:144.9650,
+  q:"Novotel Melbourne on Collins, 270 Collins St, Melbourne VIC"
+};
+
+const SPOTS = [
+
+  /* ---------- LANEWAYS & STREET ART ---------- */
+  {name:"Hosier Lane", cat:"laneways", area:"off Flinders Ln, CBD", lat:-37.8165, lng:144.9690, note:"The icon — a living, repainted graffiti canvas opposite Fed Square.", q:"Hosier Lane, Melbourne VIC"},
+  {name:"Union Lane (hidden Bourke St grid)", cat:"laneways", area:"off Bourke St Mall", lat:-37.8142, lng:144.9646, note:"Hidden graffiti run threading behind the shops between Bourke St Mall and Little Collins.", q:"Union Lane, Melbourne VIC"},
+  {name:"The Block Arcade", cat:"laneways", area:"282 Collins St, CBD", lat:-37.8158, lng:144.9646, note:"Grand 1890s mosaic-floored arcade — Melbourne's most opulent historic architecture.", q:"The Block Arcade, Melbourne VIC"},
+  {name:"Royal Arcade", cat:"laneways", area:"335 Bourke St, CBD", lat:-37.8151, lng:144.9642, note:"Australia's oldest arcade (1869) — Gaunt's clock, Gog & Magog, glass roof.", q:"Royal Arcade, Melbourne VIC"},
+
+  /* ---------- COFFEE & CAFÉS ---------- */
+  {name:"Patricia Coffee Brewers", cat:"pastry", area:"west-end CBD", lat:-37.8145, lng:144.9570, note:"Standing-room-only cult espresso bar on a quiet corner.", q:"Patricia Coffee Brewers, Melbourne VIC"},
+  {name:"Higher Ground", cat:"brekky", area:"650 Little Bourke St, CBD", lat:-37.8156, lng:144.9542, note:"Cathedral-ceiling former power station — all-day dining + coffee.", q:"Higher Ground, Melbourne VIC"},
+  {name:"REGULARS", cat:"pastry", area:"CBD / North Melbourne", lat:-37.8092, lng:144.9624, note:"Retro-Americana fit-out — famed for its sub-zero iced coffee. Check exact address before you go.", q:"Regulars cafe Melbourne VIC"},
+  {name:"Market Lane Coffee", cat:"pastry", area:"Queen Vic Market, CBD", lat:-37.8074, lng:144.9575, note:"Melbourne's benchmark for clean, seasonal filter — grab one at QVM.", q:"Market Lane Coffee Queen Victoria Market Melbourne VIC"},
+  {name:"Proud Mary", cat:"brekky", area:"172 Oxford St, Collingwood", lat:-37.8009, lng:144.9878, note:"Collingwood brunch institution, in-house roasting.", q:"Proud Mary Collingwood VIC"},
+  {name:"Auction Rooms", cat:"brekky", area:"103 Errol St, North Melbourne", lat:-37.8056, lng:144.9520, note:"Former auction house — one of the city's loveliest café rooms.", q:"Auction Rooms North Melbourne VIC"},
+  {name:"ST. ALi", cat:"brekky", area:"12–18 Yarra Pl, South Melbourne", lat:-37.8318, lng:144.9556, note:"Laneway warehouse pioneer — playful menu, deep coffee bench.", q:"St Ali South Melbourne VIC"},
+  {name:"Code Black HQ", cat:"brekky", area:"Brunswick", lat:-37.7746, lng:144.9625, note:"Roastery HQ café — spacious industrial Brunswick warehouse.", q:"Code Black Coffee Brunswick VIC"},
+  {name:"Cibi", cat:"brekky", area:"45 Keele St, Collingwood", lat:-37.7995, lng:144.9885, note:"Japanese café + design/concept store — calm, considered, lovely goods.", q:"Cibi Collingwood VIC"},
+  {name:"Brunetti Oro", cat:"pastry", area:"Flinders Ln, CBD", lat:-37.8166, lng:144.9665, note:"Grand Italian café + pasticceria — espresso, towering cakes, pastries and gelato. A sit-down institution; check the exact branch before you go.", q:"Brunetti Oro, Melbourne VIC"},
+
+  /* ---------- EATS · LUNCH & DINNER ---------- */
+  {name:"Cookie", cat:"eats", area:"Curtin House L1, 252 Swanston St, CBD", lat:-37.8112, lng:144.9653, note:"Famed Thai restaurant + beer hall in the old Curtin House. Do the LUNCH SPECIAL with rice — perfect solo meal. Then climb to the amazing rooftop bar.", q:"Cookie, Curtin House, Swanston St Melbourne VIC"},
+  {name:"Chinatown precinct", cat:"eats", area:"Little Bourke St, CBD", lat:-37.8114, lng:144.9685, note:"Next-level dumplings — graze from spot to spot down Little Bourke.", q:"Chinatown, Little Bourke Street, Melbourne VIC"},
+
+  /* ---------- BAKERIES & SWEETS (now under Coffee, Cafés & Bakeries) ---------- */
+  {name:"St Kilda bakeries & cake shops", cat:"pastry", area:"Acland St, St Kilda", lat:-37.8678, lng:144.9797, note:"The iconic Acland St cake windows — walk past early just to catch the smells.", q:"Acland Street cake shops, St Kilda VIC"},
+
+  /* ---------- MARKETS ---------- */
+  {name:"Queen Victoria Market", cat:"markets", area:"CBD", lat:-37.8076, lng:144.9568, note:"STRICT ORDERS: hit the Hot Jam Donut Van. Day market open Tue/Thu–Sun.", q:"Queen Victoria Market, Melbourne VIC"},
+  {name:"Prahran Market", cat:"markets", area:"163 Commercial Rd, Prahran", lat:-37.8465, lng:144.9924, note:"Historic fresh-produce market — great for a winter grazing lunch. Tue/Thu–Sun.", q:"Prahran Market, Prahran VIC"},
+  {name:"South Melbourne Market", cat:"markets", area:"South Melbourne", lat:-37.8320, lng:144.9559, note:"Massive indoor deli-style market — build a cheese/bread/cured-meat picnic haul. Wed/Fri–Sun.", q:"South Melbourne Market, South Melbourne VIC"},
+  {name:"Camberwell Sunday Market", cat:"markets", area:"Camberwell", lat:-37.8300, lng:145.0581, note:"Sunday-only flea market — treasure-hunt secondhand, records, antiques. Go early.", q:"Camberwell Sunday Market, Camberwell VIC"},
+  {name:"Rose Street Artists' Market", cat:"markets", area:"60 Rose St, Fitzroy", lat:-37.7959, lng:144.9772, note:"WEEKENDS ONLY (Sat–Sun) — local makers, prints, jewellery, ceramics.", q:"Rose Street Artists Market Fitzroy VIC"},
+  {name:"Gertrude St Market", cat:"markets", area:"Fitzroy", lat:-37.8054, lng:144.9749, note:"Small pop-up maker market on Gertrude St — check dates.", q:"Gertrude Street, Fitzroy VIC"},
+
+  /* ---------- VINTAGE & THRIFTING (now under Design, Boutiques & Vintage) ---------- */
+  {name:"OTC Vintage", cat:"design", area:"Flinders St, CBD", lat:-37.8176, lng:144.9665, note:"Beloved CBD vintage — great denim and jackets.", q:"OTC Vintage Melbourne VIC"},
+  {name:"City of Vintage", cat:"design", area:"Sydney Rd, Brunswick", lat:-37.7740, lng:144.9608, note:"Y2K + pop-culture vintage and collectibles.", q:"City of Vintage Brunswick VIC"},
+  {name:"RetroStar Vintage", cat:"design", area:"Nicholas Building, 37 Swanston St, CBD", lat:-37.8166, lng:144.9667, note:"Vintage warehouse inside the wonderful heritage Nicholas Building.", q:"RetroStar Vintage Nicholas Building Melbourne VIC"},
+  {name:"Wax Museum Records", cat:"design", area:"Flinders St, CBD", lat:-37.8177, lng:144.9661, note:"Vinyl + streetwear crate-digging.", q:"Wax Museum Records Melbourne VIC"},
+
+  /* ---------- DESIGN & BOUTIQUES ---------- */
+  {name:"Gertrude Street strip", cat:"design", area:"Fitzroy", lat:-37.7987, lng:144.9800, note:"Design stores, galleries and indie labels along Gertrude St.", q:"Gertrude Street, Fitzroy VIC"},
+  {name:"Brunswick Street strip", cat:"design", area:"Fitzroy", lat:-37.7975, lng:144.9784, note:"Eclectic secondhand + boutiques — browse end to end.", q:"Brunswick Street, Fitzroy VIC"},
+  {name:"Third Drawer Down", cat:"design", area:"Brunswick St, Fitzroy", lat:-37.8054, lng:144.9771, note:"Artist-collab design objects and irreverent homewares.", q:"Third Drawer Down Fitzroy VIC"},
+  {name:"Assembly Label", cat:"design", area:"Smith St, Fitzroy/Collingwood", lat:-37.7975, lng:144.9844, note:"Minimal, warm-neutral Australian basics — bang on your palette.", q:"Assembly Label Smith Street Fitzroy VIC"},
+  {name:"The Yards", cat:"design", area:"Collingwood", lat:-37.8004, lng:144.9845, note:"Collingwood Yards creative precinct — studios, shops, café.", q:"Collingwood Yards, Collingwood VIC"},
+  {name:"DFO South Wharf", cat:"design", area:"South Wharf", lat:-37.8250, lng:144.9490, note:"Walk-accessible discount outlet mall by the river.", q:"DFO South Wharf, Melbourne VIC"},
+
+  /* ---------- MUSEUMS & GALLERIES (now under Sights, Laneways & Galleries) ---------- */
+  {name:"National Gallery of Victoria (NGV)", cat:"laneways", area:"180 St Kilda Rd, Southbank", lat:-37.8226, lng:144.9689, note:"THE big one — modern + traditional collection, stunning architecture, the water-wall entry. Free general entry; perfect rainy-day anchor. NGV FRIDAY NIGHTS run alongside the Winter Masterpieces show (Jun–Aug): live music, a bar and late viewing.", q:"National Gallery of Victoria NGV International Melbourne VIC"},
+
+  /* ---------- ICONS & VIEWS (now under Sights, Laneways & Galleries) ---------- */
+  {name:"Flinders Street Station", cat:"laneways", area:"Flinders & Swanston, CBD", lat:-37.8183, lng:144.9671, note:"Melbourne's landmark 1909 railway facade — the classic 'meet me under the clocks'.", q:"Flinders Street Station, Melbourne VIC"},
+  {name:"Federation Square", cat:"laneways", area:"Flinders St, CBD", lat:-37.8180, lng:144.9691, note:"Angular civic plaza on the river — screens, ACMI, and warm spots to duck into.", q:"Federation Square, Melbourne VIC"},
+  {name:"State Library Victoria", cat:"laneways", area:"328 Swanston St, CBD", lat:-37.8098, lng:144.9646, note:"The domed La Trobe Reading Room is breathtaking — free, warm, and a designer's dream.", q:"State Library Victoria, Melbourne VIC"},
+  {name:"St Kilda Pier & penguins", cat:"laneways", area:"St Kilda", lat:-37.8663, lng:144.9722, note:"Walk the pier around dusk to spot the little penguin colony on the breakwater (free — wrap up warm).", q:"St Kilda Pier, St Kilda VIC"},
+  {name:"Royal Exhibition Building", cat:"laneways", area:"Carlton Gardens", lat:-37.8045, lng:144.9717, note:"UNESCO-listed 1880 dome in formal gardens — stunning heritage architecture.", q:"Royal Exhibition Building, Carlton VIC"},
+
+  /* ---------- WELLNESS & BATHHOUSES ---------- */
+  {name:"Sense of Self", cat:"wellness", area:"Collingwood", lat:-37.8006, lng:144.9902, note:"Design-led bathhouse + sauna + treatments — a calm reset (check women's / all-gender sessions).", q:"Sense of Self bathhouse Collingwood VIC"},
+  {name:"Aurora Spa & Bathhouse", cat:"wellness", area:"The Prince, St Kilda", lat:-37.8660, lng:144.9790, note:"Seaside day spa — mineral pools, sauna and treatments a block from the water.", q:"Aurora Spa St Kilda VIC"},
+  {name:"Royal Botanic Gardens", cat:"laneways", area:"Birdwood Ave, South Yarra", lat:-37.8304, lng:144.9803, note:"38 hectares of green calm just south of the CBD — a restorative cold-weather walk.", q:"Royal Botanic Gardens Victoria, Melbourne VIC"},
+
+  /* ---------- (was Fun & Playful — split into Sights / Markets / Bars) ---------- */
+  {name:"ACMI", cat:"laneways", area:"Fed Square, CBD", lat:-37.8176, lng:144.9687, note:"Free, brilliant screen-culture museum — video games, film and immersive design.", q:"ACMI, Federation Square, Melbourne VIC"},
+
+  /* ===== ADDED FROM YOUR LIST (researched) ===== */
+  {name:"Lumen People", cat:"brekky", area:"262 Johnston St, Fitzroy", lat:-37.7987, lng:144.9826, note:"Day-to-night café + natural-wine bar — excellent coffee, seasonal plates, lovely cakes.", q:"Lumen People, Johnston St Fitzroy VIC"},
+  {name:"Dua Bakehouse", cat:"pastry", area:"Collingwood Yards, 35 Johnston St", lat:-37.8004, lng:144.9846, note:"“Scandinasian” bakery — pandan princess cake, shokupan, melonpan and great coffee. Daily 8am–3pm.", q:"Dua Bakehouse Collingwood VIC"},
+  {name:"Florian", cat:"brekky", area:"617 Rathdowne St, Carlton North", lat:-37.7856, lng:144.9713, note:"Beloved Rathdowne Village daytime café — produce-driven, ever-changing blackboard, Austro pastries. Walk-ins only.", q:"Florian, Rathdowne St Carlton North VIC"},
+  {name:"Masses Bagels", cat:"pastry", area:"5 Smith St, Fitzroy", lat:-37.8052, lng:144.9835, note:"Wild-fermented sourdough bagels baked on site — quark, smoked trout, rip’n’dip packs. Open till early arvo.", q:"Masses Bagels, Smith St Fitzroy VIC"},
+  {name:"Project 281 Coffee Roasters", cat:"brekky", area:"281 Albert St, Brunswick", lat:-37.7699, lng:144.9628, note:"Plant-filled Brunswick roastery + all-day café with full table service. Open 7 days.", q:"Project 281 Coffee Roasters Brunswick VIC"},
+  {name:"Publique Bakery", cat:"pastry", area:"18 Blender Lane, CBD (near QVM)", lat:-37.8068, lng:144.9598, note:"French boulangerie — croissants, cruffins, cronuts; also has stalls at Queen Vic and Preston markets.", q:"Publique Bakery, Blender Lane Melbourne VIC"},
+  {name:"Brick Lane", cat:"brekky", area:"33 Guildford Lane, CBD", lat:-37.8113, lng:144.9635, note:"Bakery-café down a leafy CBD laneway — big all-day breakfast; walk-ins only on weekends.", q:"Brick Lane, Guildford Lane Melbourne VIC"},
+  {name:"Bakemono Bakers", cat:"pastry", area:"273 Little Lonsdale St, CBD", lat:-37.8106, lng:144.9636, note:"Tiny Japanese-Korean bakery on Drewery Lane — yuzu-almond croissants, shokupan, garlic cream buns.", q:"Bakemono Bakers Melbourne VIC"},
+
+  {name:"Dom’s Pizzeria & Social Club", cat:"eats", area:"1/301 Swanston St, CBD", lat:-37.8103, lng:144.9656, note:"Three-level Italian joint — slow-ferment woodfired pizza, deep wine/lambrusco list, pool room and rooftop bar. Wed–Sat.", q:"Dom’s Social Club, Swanston St Melbourne VIC"},
+  {name:"Brickhouse", cat:"eats", area:"Fitzroy — CONFIRM the venue", lat:-37.7985, lng:144.9784, note:"On your list as an eats spot, but a few Melbourne venues share this name — I couldn’t pin the exact one. Check the address before you go.", q:"Brickhouse Melbourne VIC"},
+
+  {name:"Pan After", cat:"design", area:"38 Cambridge St, Collingwood", lat:-37.8000, lng:144.9880, note:"Design + objects gallery-store — collectible furniture, glass and art books; beautifully sourced pieces.", q:"Pan After, Cambridge St Collingwood VIC"},
+  {name:"Rex Vintage", cat:"design", area:"24 Waterloo Rd, Collingwood", lat:-37.8010, lng:144.9892, note:"Curated vintage + antique furniture and character pieces. Check opening hours before visiting.", q:"Rex Vintage, Waterloo Rd Collingwood VIC"},
+  {name:"Dejour Jeans", cat:"design", area:"542 Sydney Rd, Brunswick", lat:-37.7686, lng:144.9611, note:"Floor-to-ceiling denim with FREE on-site alterations — a cult Brunswick institution. Expect a wait on weekends.", q:"Dejour Jeans, Sydney Rd Brunswick VIC"},
+  {name:"Mode Mischief", cat:"design", area:"559 Chapel St, South Yarra", lat:-37.8410, lng:144.9945, note:"‘Hotel Mode’ pop-up of the viral Melbourne label. NOTE: listed to close ~26 Jul 2026 — check it’s still open.", q:"Mode Mischief, Chapel St South Yarra VIC"},
+
+  {name:"Fitzroy Mills Market", cat:"markets", area:"75 Rose St, Fitzroy", lat:-37.7957, lng:144.9776, note:"Saturday produce/wellness market in a historic wool mill, right by Rose St Artists’ Market. Sat 9am–2pm.", q:"Fitzroy Mills Market, Rose St Fitzroy VIC"},
+
+  {name:"EQ Wellbeing Bathhouse", cat:"wellness", area:"L5, 22 Kings Place, South Melbourne", lat:-37.8330, lng:144.9575, note:"Modern bathhouse — mineral spa, sauna, steam and cold plunge, plus breathwork and light/sound therapy. Book ahead.", q:"EQ Wellbeing, Kings Place South Melbourne VIC"},
+  {name:"Soak Bathhouse", cat:"wellness", area:"10 River St, South Yarra", lat:-37.8386, lng:144.9931, note:"Social urban bathhouse just behind Chapel St — magnesium mineral pools, cedarwood sauna, steam and cold plunge, with infrared/massage/LED add-ons. Open 7 days from 6:30am; book ahead.", q:"Soak Bathhouse South Yarra VIC"},
+  {name:"Luxe Bathhouse", cat:"wellness", area:"6/439 Docklands Dr, Docklands", lat:-37.8146, lng:144.9398, note:"Intimate, dark-and-moody Docklands bathhouse — mineral pool, Finnish + infrared saunas, steam, cold plunge and red-light therapy; private rooms available. Open 7 days, early till late.", q:"Luxe Bathhouse Docklands VIC"},
+
+  {name:"10 Bourke St Photo Booth", cat:"laneways", area:"10 Bourke St, CBD (Butcher’s Diner)", lat:-37.8112, lng:144.9730, note:"Vintage-style strip photo booth by Parliament station — walk up, tap, printed strips on the spot (~$9).", q:"Butcher’s Diner 10 Bourke St Melbourne VIC"}
+
+  /* +++ paste your own finds above this line +++ */
+];
+SPOTS.forEach((s,i)=>s.id=i);
+
+/* ============================ MAP ============================ */
+const map = L.map('map', {zoomControl:true}).setView([START.lat, START.lng], 14);
+const errorBox = document.getElementById('map-error');
+function showMapError(msg){ errorBox.textContent = msg; errorBox.style.display='block'; }
+
+/* the base is ALWAYS a clean grayscale/mono map. Primary is CARTO Positron; if that
+   CDN is unreachable, we fall back to ANOTHER mono map (Esri Light Gray) — never to
+   a full-colour street map. */
+const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:20, attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const monoFallback = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:16, maxZoom:20, attribution:'Tiles &copy; Esri — Light Gray'});
+
+/* tile status — keep it mono no matter what; the only swap is CARTO→Esri (both grayscale) */
+let anyTile=false, swappedMono=false;
+function hideMapError(){ errorBox.style.display='none'; }
+function goMono(){ if(swappedMono) return; swappedMono=true; if(map.hasLayer(baseLayer)) map.removeLayer(baseLayer); monoFallback.addTo(map); }
+map.on('tileload', ()=>{ anyTile=true; hideMapError(); });
+baseLayer.on('tileerror', ()=>{ if(!anyTile) goMono(); });   // CARTO blocked → the other MONO source
+setTimeout(()=>{
+  if(!anyTile) goMono();
+  if(!anyTile){ showMapError('Map’s still loading — if it stays blank, check your connection. The filters and route list work either way.'); setTimeout(hideMapError, 6000); }
+}, 8000);
+
+/* make sure the map sizes correctly once layout + fonts settle */
+window.addEventListener('load', ()=>{ setTimeout(()=>map.invalidateSize(),150); setTimeout(()=>map.invalidateSize(),700); });
+window.addEventListener('resize', ()=>map.invalidateSize());
+
+const markerLayer = L.layerGroup().addTo(map);
+const routeLayer  = L.layerGroup().addTo(map);
+
+/* Permanent hotel anchor */
+L.marker([START.lat, START.lng], {
+  icon:L.divIcon({className:'', html:'<div style="width:30px;height:30px;border-radius:7px;background:#f2f0ec;border:2px solid #111;box-shadow:0 0 0 2px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;color:#111;letter-spacing:.5px;">HOTEL</div>', iconSize:[30,30], iconAnchor:[15,15]}),
+  zIndexOffset:1000
+}).addTo(map).bindPopup('<span class="popup-cat" style="color:#f2f0ec;">Base camp</span><div class="popup-title">'+START.name+'</div><p class="popup-desc">'+START.area+'</p>');
+
+/* ============================ STATE ============================ */
+let activeCats = new Set(['pastry','brekky','eats']);   // which categories' pins are shown
+let routeIds   = new Set();                    // hand-picked stops (spot ids)
+let travelMode = 'walking';
+let hideSeen   = false;                         // filter: hide places already ticked off
+let seenSet    = new Set();                     // places you've visited (persisted by name)
+try{ const _s=JSON.parse(localStorage.getItem('mel-seen')||'[]'); if(Array.isArray(_s)) _s.forEach(n=>seenSet.add(n)); }catch(e){}
+function spotById(id){ return SPOTS.find(s=>s.id===id); }
+function isSeen(s){ return seenSet.has(s.name); }
+function toggleSeenById(id){ const s=spotById(id); if(!s) return; if(seenSet.has(s.name)) seenSet.delete(s.name); else seenSet.add(s.name); try{localStorage.setItem('mel-seen', JSON.stringify([...seenSet]));}catch(e){} render(); }
+let showFav    = false;                         // filter: show only favourites
+let favSet     = new Set();                     // starred favourites (persisted by name)
+try{ const _f=JSON.parse(localStorage.getItem('mel-fav')||'[]'); if(Array.isArray(_f)) _f.forEach(n=>favSet.add(n)); }catch(e){}
+function isFav(s){ return favSet.has(s.name); }
+function toggleFavById(id){ const s=spotById(id); if(!s) return; if(favSet.has(s.name)) favSet.delete(s.name); else favSet.add(s.name); try{localStorage.setItem('mel-fav', JSON.stringify([...favSet]));}catch(e){} render(); }
+
+/* ============================ HELPERS ============================ */
+function hex(cat){ return CATS[cat].hex; }
+function haversine(a,b){
+  const R=6371, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function nnFrom(start, pts){
+  const rest=pts.slice(), order=[]; let cur=start;
+  while(rest.length){ let bi=0,bd=Infinity;
+    for(let i=0;i<rest.length;i++){ const d=haversine(cur,rest[i]); if(d<bd){bd=d;bi=i;} }
+    cur=rest.splice(bi,1)[0]; order.push(cur); }
+  return order;
+}
+function legMin(km){
+  if(travelMode==='walking') return km/4.6*60;
+  if(km<0.5) return km/4.6*60;
+  return km/16*60 + 6;
+}
+function fmtT(m){ m=Math.max(1,Math.round(m)); if(m<60) return m+' min'; const h=Math.floor(m/60),x=m%60; return x? h+'h '+x+'m':h+'h'; }
+function fmtKm(km){ return km<1 ? Math.round(km*1000)+' m' : km.toFixed(1)+' km'; }
+function modeWord(){ return travelMode==='walking' ? 'walk' : 'tram/train'; }
+function travelParam(){ return travelMode==='walking' ? 'walking' : 'transit'; }
+function dirUrl(fromQ,toQ,tm){ return 'https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(fromQ)+'&destination='+encodeURIComponent(toQ)+'&travelmode='+(tm||travelParam()); }
+
+function icon(cat,num,seen,fav){
+  return L.divIcon({className:'', iconSize:[26,26], iconAnchor:[13,13], popupAnchor:[0,-14],
+    html:'<div style="width:26px;height:26px;border-radius:50%;background:'+hex(cat)+';border:2px solid #111;box-shadow:0 0 0 '+(fav?'3px #e8b64a':'2px rgba(0,0,0,.15)')+';display:flex;align-items:center;justify-content:center;font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:12px;color:#fff;opacity:'+(seen?'0.45':'1')+';">'+(num||'')+'</div>'});
+}
+function dot(cat,seen,fav){
+  return L.divIcon({className:'', iconSize:[15,15], iconAnchor:[7,7], popupAnchor:[0,-8],
+    html:'<div style="width:14px;height:14px;border-radius:50%;background:'+hex(cat)+';border:2px solid #111;box-shadow:0 0 0 '+(fav?'3px #e8b64a':'2px rgba(0,0,0,.12)')+';opacity:'+(seen?'0.32':'.92')+';"></div>'});
+}
+function spotPopup(s){
+  const on=routeIds.has(s.id), seen=isSeen(s), fav=isFav(s);
+  return '<span class="popup-cat" style="color:'+hex(s.cat)+';">'+CATS[s.cat].label+'</span>'+
+    '<div class="popup-title">'+s.name+'</div><p class="popup-desc">'+s.area+' — '+s.note+'</p>'+
+    '<button class="pop-btn'+(on?' in':'')+'" data-id="'+s.id+'">'+(on?'✓ In route — remove':'＋ Add to route')+'</button>'+
+    '<button class="fav-pop-btn'+(fav?' in':'')+'" data-fav-id="'+s.id+'">'+(fav?'★ Favourited — remove':'☆ Favourite')+'</button>'+
+    '<button class="seen-pop-btn'+(seen?' in':'')+'" data-seen-id="'+s.id+'">'+(seen?'✓ Seen — unmark':'Mark as seen')+'</button>'+
+    '<div style="margin-top:8px;"><a class="popup-link" href="'+dirUrl(START.q,s.q)+'" target="_blank" rel="noopener">Directions from hotel ↗</a></div>';
+}
+
+/* toggle a stop in/out of the route */
+function toggleRoute(id){ if(routeIds.has(id)) routeIds.delete(id); else routeIds.add(id); render(); }
+
+/* popup button wiring (bound once) */
+map.on('popupopen', e=>{
+  const el=e.popup.getElement(); if(!el) return;
+  const btn=el.querySelector('.pop-btn');
+  if(btn) btn.addEventListener('click', ()=>{ map.closePopup(); toggleRoute(parseInt(btn.getAttribute('data-id'),10)); });
+  const sbtn=el.querySelector('.seen-pop-btn');
+  if(sbtn) sbtn.addEventListener('click', ()=>{ map.closePopup(); toggleSeenById(parseInt(sbtn.getAttribute('data-seen-id'),10)); });
+  const fbtn=el.querySelector('.fav-pop-btn');
+  if(fbtn) fbtn.addEventListener('click', ()=>{ map.closePopup(); toggleFavById(parseInt(fbtn.getAttribute('data-fav-id'),10)); });
+});
+
+/* ============================ STREET ROUTING ============================ */
+/* Keyless public routers that send permissive CORS headers, so the street
+   path loads even when this file is opened straight from disk (file://).
+   Tried in order: a pedestrian router first, then the OSRM demo as backup. */
+const ROUTERS = [
+  c => 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/'+c+'?overview=full&geometries=geojson',
+  c => 'https://router.project-osrm.org/route/v1/driving/'+c+'?overview=full&geometries=geojson'
+];
+const routeCache={};                 // key -> {geo, legs(km)}
+let routeToken=0;
+function routeKey(order){ return order.map(s=>s.id).join('-'); }
+function straightLegs(order){
+  const legs=[haversine(START,order[0])];
+  for(let i=0;i<order.length-1;i++) legs.push(haversine(order[i],order[i+1]));
+  return legs;
+}
+async function fetchStreetRoute(coords){
+  for(const build of ROUTERS){
+    try{
+      const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),7000);
+      const res=await fetch(build(coords), {signal:ctrl.signal});   // simple GET → no CORS preflight
+      clearTimeout(to);
+      if(!res.ok) continue;
+      const data=await res.json();
+      if(data && data.routes && data.routes[0] && data.routes[0].legs && data.routes[0].geometry) return data.routes[0];
+    }catch(e){ /* blocked or down — try the next router */ }
+  }
+  return null;
+}
+async function computeAndDrawRoute(order){
+  const myToken=++routeToken;
+  const key=routeKey(order);
+
+  /* cached street result → draw instantly, no network */
+  if(routeCache[key]){
+    L.geoJSON(routeCache[key].geo, {style:{color:'#111',weight:4,opacity:.85,lineJoin:'round'}}).addTo(routeLayer);
+    buildRoute(order, routeCache[key].legs, true);
+    return;
+  }
+
+  /* immediate straight-line fallback so the list is never blank */
+  const straight=L.polyline([[START.lat,START.lng]].concat(order.map(s=>[s.lat,s.lng])), {color:'#111',weight:3,opacity:.5,dashArray:'4 7'});
+  straight.addTo(routeLayer);
+  buildRoute(order, straightLegs(order), false);
+
+  /* fetch the real street path (pedestrian, with a driving backup) */
+  const coords=[[START.lng,START.lat]].concat(order.map(s=>[s.lng,s.lat]))
+    .map(c=>c[0].toFixed(6)+','+c[1].toFixed(6)).join(';');
+  const r=await fetchStreetRoute(coords);
+  if(myToken!==routeToken) return;                    // superseded by a newer selection
+  if(r){
+    const legs=r.legs.map(l=>l.distance/1000);
+    routeCache[key]={geo:r.geometry, legs:legs};
+    if(routeLayer.hasLayer(straight)) routeLayer.removeLayer(straight);
+    L.geoJSON(r.geometry, {style:{color:'#111',weight:4,opacity:.85,lineJoin:'round'}}).addTo(routeLayer);
+    buildRoute(order, legs, true);
+  } else {
+    buildRoute(order, straightLegs(order), 'failed');   // couldn't reach a router — say so
+  }
+}
+
+/* ============================ RENDER ============================ */
+function render(){
+  markerLayer.clearLayers();
+  routeLayer.clearLayers();
+
+  const visibleCity = SPOTS.filter(s=>activeCats.has(s.cat));
+  const selected    = SPOTS.filter(s=>routeIds.has(s.id));
+
+  /* plain dots for visible-but-not-selected (dimmed if seen; hidden if the filter is on) */
+  visibleCity.forEach(s=>{ if(routeIds.has(s.id)) return; if(hideSeen && isSeen(s)) return; if(showFav && !isFav(s)) return; L.marker([s.lat,s.lng],{icon:dot(s.cat,isSeen(s),isFav(s))}).addTo(markerLayer).bindPopup(spotPopup(s)); });
+
+  /* the route through hand-picked stops */
+  let order=[];
+  if(selected.length){
+    order=nnFrom(START, selected);
+    order.forEach((s,i)=> L.marker([s.lat,s.lng],{icon:icon(s.cat,i+1,isSeen(s),isFav(s))}).addTo(markerLayer).bindPopup(spotPopup(s)) );
+  }
+
+  buildChoose(visibleCity);
+  if(order.length) computeAndDrawRoute(order); else buildRoute([], [], false);
+
+  /* fit to what's on screen */
+  const pts=[[START.lat,START.lng]];
+  const shown = visibleCity.concat(selected);
+  if(shown.length) shown.forEach(s=>pts.push([s.lat,s.lng]));
+  if(pts.length>1) map.fitBounds(pts,{padding:[45,45], maxZoom:15});
+  else map.setView([START.lat,START.lng],14);
+}
+
+function buildChoose(visibleCity){
+  const host=document.getElementById('choose-wrap');
+  const sc=document.getElementById('seenCount'); if(sc){ const p=[]; if(favSet.size) p.push(favSet.size+' ★'); if(seenSet.size) p.push(seenSet.size+' seen'); sc.textContent=p.join(' · '); }
+  const list = visibleCity.filter(s=> (!hideSeen || !isSeen(s)) && (!showFav || isFav(s)) );
+  if(!list.length){
+    let msg='Turn on a category above, then tick the exact spots you want here — a coffee, a lunch spot, a bathhouse. Only what you tick gets routed.';
+    if(showFav && visibleCity.length) msg='No favourites in your active categories yet. Star a place with ★, or turn off “favourites only”.';
+    else if(hideSeen && visibleCity.length) msg='Everything in your active categories is marked seen. Untick “hide seen”, or turn on more categories.';
+    host.innerHTML='<div class="empty-hint">'+msg+'</div>';
+    return;
+  }
+  let html='';
+  CAT_ORDER.forEach(cat=>{
+    const items=list.filter(s=>s.cat===cat);
+    if(!items.length) return;
+    html+='<div class="choose-group"><div class="choose-head"><span class="cat-dot" style="background:'+hex(cat)+';box-shadow:none;"></span>'+CATS[cat].label+'</div>';
+    items.forEach(s=>{
+      const on=routeIds.has(s.id), seen=isSeen(s), fav=isFav(s);
+      html+='<div class="choose-row'+(on?' on':'')+(seen?' seen':'')+(fav?' fav':'')+'">'+
+        '<label class="choose-pick"><input type="checkbox" data-route="'+s.id+'"'+(on?' checked':'')+'>'+
+          '<span class="choose-name">'+s.name+'<small>'+s.area+'</small></span></label>'+
+        '<button type="button" class="fav-btn'+(fav?' on':'')+'" data-fav-id="'+s.id+'" title="'+(fav?'Favourite — tap to remove':'Add to favourites')+'">★</button>'+
+        '<button type="button" class="seen-btn'+(seen?' on':'')+'" data-seen-id="'+s.id+'" title="'+(seen?'Seen — tap to unmark':'Mark as seen')+'">✓</button>'+
+      '</div>';
+    });
+    html+='</div>';
+  });
+  host.innerHTML=html;
+  host.querySelectorAll('input[data-route]').forEach(cb=>cb.addEventListener('change',()=>toggleRoute(parseInt(cb.getAttribute('data-route'),10))));
+  host.querySelectorAll('button[data-seen-id]').forEach(b=>b.addEventListener('click',()=>toggleSeenById(parseInt(b.getAttribute('data-seen-id'),10))));
+  host.querySelectorAll('button[data-fav-id]').forEach(b=>b.addEventListener('click',()=>toggleFavById(parseInt(b.getAttribute('data-fav-id'),10))));
+}
+
+function buildRoute(order, legs, street){
+  const host=document.getElementById('route-wrap');
+  if(!order.length){
+    host.innerHTML='<div class="empty-hint">No stops picked yet. Tick spots above (or tap a pin → “Add to route”) and they’ll chain into a street-by-street order from your hotel.</div>';
+    return;
+  }
+  let total=0, tmin=0;
+  legs.forEach(km=>{ total+=km; tmin+=legMin(km); });
+
+  let rows='<div class="stop"><div class="stop-num home">★</div><div class="stop-body"><div class="stop-name">'+START.name+'</div><div class="stop-desc">'+START.area+' — start here.</div>'+
+    '<div class="stop-leg">→ '+fmtKm(legs[0])+' · ~'+fmtT(legMin(legs[0]))+' '+modeWord()+' · <a href="'+dirUrl(START.q,order[0].q)+'" target="_blank" rel="noopener">Directions</a></div></div></div>';
+
+  order.forEach((s,i)=>{
+    let leg='';
+    if(i<order.length-1){
+      const km=legs[i+1];
+      leg='<div class="stop-leg">→ '+fmtKm(km)+' · ~'+fmtT(legMin(km))+' '+modeWord()+' to next · <a href="'+dirUrl(s.q,order[i+1].q)+'" target="_blank" rel="noopener">Directions</a></div>';
+    }
+    rows+='<div class="stop"><div class="stop-num" style="background:'+hex(s.cat)+';">'+(i+1)+'</div>'+
+      '<div class="stop-body"><div class="stop-name">'+s.name+'<button class="rm" data-rm="'+s.id+'" title="Remove">×</button></div>'+
+      '<div class="stop-desc">'+s.area+' — '+s.note+'</div>'+leg+'</div></div>';
+  });
+
+  const wp=order.slice(0,-1).map(s=>encodeURIComponent(s.q)).join('|');
+  let full='https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(START.q)+'&destination='+encodeURIComponent(order[order.length-1].q)+'&travelmode='+travelParam();
+  if(wp) full+='&waypoints='+wp;
+
+  let distLabel;
+  if(street===true) distLabel='~'+total.toFixed(1)+' km along streets';
+  else if(street==='failed') distLabel='straight-line ~'+total.toFixed(1)+' km · couldn’t reach street router, use Directions';
+  else distLabel='measuring streets… (straight-line ~'+total.toFixed(1)+' km)';
+  host.innerHTML='<div class="route-summary"><b>'+order.length+' stop'+(order.length===1?'':'s')+'</b> from hotel · '+distLabel+' · est. ~'+fmtT(tmin)+' '+modeWord()+
+    '<a class="route-open" href="'+full+'" target="_blank" rel="noopener">↗ Open whole route in Google Maps</a></div>'+
+    rows+
+    '<div class="route-actions"><button id="clearRoute" type="button">Clear route</button></div>';
+
+  host.querySelectorAll('button[data-rm]').forEach(b=>b.addEventListener('click',()=>toggleRoute(parseInt(b.getAttribute('data-rm'),10))));
+  const cr=document.getElementById('clearRoute'); if(cr) cr.addEventListener('click',()=>{ routeIds.clear(); render(); });
+}
+
+/* ============================ UI BUILD ============================ */
+const catEl=document.getElementById('cat-toggles');
+const allCb=document.getElementById('allCat');
+const TOTAL_CATS=CAT_ORDER.length;
+
+/* keep every checkbox (incl. the master "All") in sync with activeCats */
+function syncToggles(){
+  document.querySelectorAll('#cat-toggles input').forEach(cb=>{ cb.checked = activeCats.has(cb.getAttribute('data-cat')); });
+  allCb.checked = (activeCats.size===TOTAL_CATS);
+}
+
+CAT_ORDER.forEach(key=>{
+  const v=CATS[key];
+  const count = SPOTS.filter(s=>s.cat===key).length;
+  const row=document.createElement('label'); row.className='cat-row';
+  row.innerHTML='<input type="checkbox" data-cat="'+key+'"'+(activeCats.has(key)?' checked':'')+'>'+
+    '<span class="cat-dot" style="background:'+v.hex+';"></span>'+
+    '<span class="cat-name">'+v.label+'</span>'+
+    '<span class="cat-count">'+count+'</span>';
+  const cb=row.querySelector('input');
+  cb.addEventListener('change',()=>{
+    if(activeCats.size===TOTAL_CATS){          // currently "all" → clicking one focuses just that category
+      activeCats.clear(); activeCats.add(key);
+    } else {
+      if(cb.checked) activeCats.add(key); else activeCats.delete(key);
+    }
+    syncToggles(); render();
+  });
+  catEl.appendChild(row);
+});
+
+/* master "All categories" toggle */
+allCb.addEventListener('change',()=>{
+  if(allCb.checked) CAT_ORDER.forEach(c=>activeCats.add(c));
+  else activeCats.clear();
+  syncToggles(); render();
+});
+document.getElementById('allCount').textContent = SPOTS.length;
+syncToggles();
+
+/* travel mode */
+document.querySelectorAll('#mode-toggle button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('#mode-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    travelMode=btn.getAttribute('data-mode');
+    document.getElementById('mode-note').textContent = travelMode==='walking'
+      ? 'Leg times and every “Directions” link are set to walking. The route line follows the pedestrian streets when you’re online — tap Directions for turn-by-turn.'
+      : 'Train + tram: leg times recalculated for public-transport hops and every “Directions” link now opens in transit mode.';
+    render();
+  });
+});
+
+/* seen + favourite filters */
+document.getElementById('hideSeen').addEventListener('change', e=>{ hideSeen=e.target.checked; render(); });
+document.getElementById('favOnly').addEventListener('change', e=>{ showFav=e.target.checked; render(); });
+
+/* ============================ NOTES ============================ */
+(function buildNotes(){
+  const host=document.getElementById('notes-build');
+  CAT_ORDER.forEach(cat=>{
+    const b=document.createElement('div'); b.className='note-block';
+    const tmpl='{ name:"", cat:"'+cat+'", area:"", lat:-37.8, lng:144.96, note:"", q:"" }  // add to SPOTS';
+    b.innerHTML='<h4><i style="background:'+CATS[cat].hex+';"></i>'+CATS[cat].label+'</h4>'+
+      '<textarea data-note="'+cat+'" placeholder="Your finds for '+CATS[cat].label+'…"></textarea>'+
+      '<details><summary>code snippet</summary><code>'+tmpl+'</code></details>';
+    host.appendChild(b);
+  });
+  document.querySelectorAll('textarea[data-note]').forEach(t=>{
+    const k='mel-note-'+t.getAttribute('data-note');
+    try{ const s=localStorage.getItem(k); if(s!==null) t.value=s; }catch(e){}
+    t.addEventListener('input',()=>{ try{localStorage.setItem(k,t.value);}catch(e){} });
+  });
+})();
+
+/* ============================ INIT ============================ */
+render();
+</script>
+</body>
+</html>
